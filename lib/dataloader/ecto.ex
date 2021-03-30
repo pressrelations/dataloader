@@ -600,8 +600,11 @@ if Code.ensure_loaded?(Ecto) do
           on_timeout: :kill_task
         ]
 
+        # Ensure consistent ordering for async_stream and zip later on
+        batches = Enum.into(source.batches, [])
+
         results =
-          source.batches
+          batches
           |> Task.async_stream(
             fn batch ->
               id = :erlang.unique_integer()
@@ -621,7 +624,7 @@ if Code.ensure_loaded?(Ecto) do
             {:exit, reason} -> {:error, reason}
           end)
 
-        source.batches
+        batches
         |> Enum.map(fn {key, _set} -> key end)
         |> Enum.zip(results)
         |> Map.new()
