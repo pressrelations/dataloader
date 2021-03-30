@@ -667,18 +667,18 @@ if Code.ensure_loaded?(Ecto) do
         query = source.query.(queryable, opts) |> Ecto.Queryable.to_query()
         repo_opts = Keyword.put(source.repo_opts, :caller, pid)
         empty = schema |> struct |> Map.fetch!(field)
-        records = records |> Enum.map(&Map.put(&1, field, empty))
 
         results =
-          if query.limit || query.offset do
-            records
-            |> preload_lateral(field, query, source.repo, repo_opts)
-          else
-            records
-            |> source.repo.preload([{field, query}], repo_opts)
-          end
+          records
+          |> Enum.map(&Map.put(&1, field, empty))
+          # MS SQL Server only supports 2100 query parameters, so stay below that limit
+          |> Enum.chunk_every(2000)
+          |> Enum.map(fn chunk ->
+            source.repo.preload(chunk, [{field, query}], repo_opts)
+          end)
+          |> List.flatten()
+          |> Enum.map(&Map.get(&1, field))
 
-        results = results |> Enum.map(&Map.get(&1, field))
         {key, Map.new(Enum.zip(ids, results))}
       end
 
